@@ -1,29 +1,31 @@
 import struct
 import time
-import re
-import shutil
-import http.client
 import os
+import subprocess
 import json
+import threading
+import traceback
+from datetime import datetime
+from traceback import print_stack
 from citra import Citra
 
-trackertempfile=open(r"trackertemp.json","r+")
-trackertemp=json.load(trackertempfile)
-print(trackertemp["game"])
+# trackertempfile=open(r"trackertemp.json","r+")
+# trackertemp=json.load(trackertempfile)
+# print(trackertemp["game"])
 # Change this value to your desired game
-if trackertemp["game"]=="XY":
-    current_game = 1
-if trackertemp["game"]=="ORAS":
-    current_game = 2
-if trackertemp["game"]=="SM":
-    current_game = 3
-if trackertemp["game"]=="USUM":
-    current_game = 4
+# if trackertemp["game"]=="XY":
+current_game = 1
+# if trackertemp["game"]=="ORAS":
+#     current_game = 2
+# if trackertemp["game"]=="SM":
+#     current_game = 3
+# if trackertemp["game"]=="USUM":
+#     current_game = 4
 # Change this value to False to disable auto-layout sprite file management
-manage_sprites = True
+manage_sprites = False
 
 # -----------------------------------------------------------------------------
-
+## Change these to dictionaries or use sqlite - this is just dex number anyway right?
 species = [
 "Egg", "Bulbasaur", "Ivysaur", "Venusaur", "Charmander", "Charmeleon", "Charizard", "Squirtle", "Wartortle", "Blastoise",
 "Caterpie", "Metapod", "Butterfree", "Weedle", "Kakuna", "Beedrill", "Pidgey", "Pidgeotto", "Pidgeot", "Rattata",
@@ -33,7 +35,7 @@ species = [
 "Meowth", "Persian", "Psyduck", "Golduck", "Mankey", "Primeape", "Growlithe", "Arcanine", "Poliwag", "Poliwhirl",
 "Poliwrath", "Abra", "Kadabra", "Alakazam", "Machop", "Machoke", "Machamp", "Bellsprout", "Weepinbell", "Victreebel",
 "Tentacool", "Tentacruel", "Geodude", "Graveler", "Golem", "Ponyta", "Rapidash", "Slowpoke", "Slowbro", "Magnemite",
-"Magneton", "Farfetch’d", "Doduo", "Dodrio", "Seel", "Dewgong", "Grimer", "Muk", "Shellder", "Cloyster", "Gastly",
+"Magneton", "Farfetchd", "Doduo", "Dodrio", "Seel", "Dewgong", "Grimer", "Muk", "Shellder", "Cloyster", "Gastly",
 "Haunter", "Gengar", "Onix", "Drowzee", "Hypno", "Krabby", "Kingler", "Voltorb", "Electrode", "Exeggcute", "Exeggutor",
 "Cubone", "Marowak", "Hitmonlee", "Hitmonchan", "Lickitung", "Koffing", "Weezing", "Rhyhorn", "Rhydon", "Chansey",
 "Tangela", "Kangaskhan", "Horsea", "Seadra", "Goldeen", "Seaking", "Staryu", "Starmie", "Mr. Mime", "Scyther", "Jynx",
@@ -100,6 +102,22 @@ species = [
 "Xurkitree", "Celesteela", "Kartana", "Guzzlord", "Necrozma", "Magearna", "Marshadow", "Poipole", "Naganadel", "Stakataka",
 "Blacephalon", "Zeraora"]
 
+with open('item-data.json','r') as f:
+    items = json.loads(f.read())
+
+with open('nature-data.json','r') as f:
+    natures = json.loads(f.read())
+
+with open('move-data.json','r') as f:
+    movedata = json.loads(f.read())
+
+with open('mon-data.json','r') as f:
+    mondata = json.loads(f.read())
+
+with open('movelearn.json','r') as f:
+    movelearndata = json.loads(f.read())
+
+## Change these to dictionaries or use sqlite
 moves = ["--", "Pound", "Karate Chop", "Double Slap", "Comet Punch", "Mega Punch", "Pay Day", "Fire Punch", "Ice Punch", "Thunder Punch",
 "Scratch", "Vice Grip", "Guillotine", "Razor Wind", "Swords Dance", "Cut", "Gust", "Wing Attack", "Whirlwind", "Fly", "Bind", "Slam",
 "Vine Whip", "Stomp", "Double Kick", "Mega Kick", "Jump Kick", "Rolling Kick", "Sand Attack", "Headbutt", "Horn Attack", "Fury Attack",
@@ -196,7 +214,7 @@ abilities = ["—", "Stench", "Drizzle", "Speed Boost", "Battle Armor", "Sturdy"
 "Power of Alchemy", "Beast Boost", "RKS System", "Electric Surge", "Psychic Surge", "Misty Surge", "Grassy Surge", "Full Metal Body",
 "Shadow Shield", "Prism Armor", "Neuroforce"]
 
-natures = ["Hardy", "Lonely", "Brave", "Adamant", "Naughty", "Bold", "Docile", "Relaxed", "Impish", "Lax", "Timid", "Hasty", "Serious",
+naturelookup = ["Hardy", "Lonely", "Brave", "Adamant", "Naughty", "Bold", "Docile", "Relaxed", "Impish", "Lax", "Timid", "Hasty", "Serious",
 "Jolly", "Naive", "Modest", "Mild", "Quiet", "Bashful", "Rash", "Calm", "Gentle", "Sassy", "Careful", "Quirky"]
 
 # -----------------------------------------------------------------------------
@@ -276,86 +294,200 @@ class Pokemon:
 
     def species_num(self):
         if len(self.raw_data) > 0:
-            return struct.unpack("<H", self.raw_data[0x8:0xA])[0]
+            return struct.unpack("<H", self.raw_data[0x8:0xA])[0] ##### Dex number
         else:
             return 0
 
     def species(self):
-        return species[self.species_num()]
+        return species[self.species_num()] ############################ Species name
 
-    def held_item_num(self):
-        return struct.unpack("<H", self.raw_data[0xA:0xC])[0]
+    def name(self):
+        speciesname = self.species().replace("Farfetchd","Farfetch&#x27;d")
+        if self.mega():
+            pokemonname = 'Mega '+speciesname
+        return pokemonname
+
+    def bst(self):
+        return mondata[self.species()]['bst']
+    
+    def types(self):
+        return mondata[self.species()]['types']
+
+    def held_item_name(self):
+        itemnum = str(struct.unpack("<H", self.raw_data[0xA:0xC])[0])
+        nm = items[itemnum]['name'].replace("é","&#233;")
+        return nm ##################################################### Held item
 
     def ability(self):
-        ability_num = struct.unpack("B", self.raw_data[0x14:0x15])[0]
-        return abilities[ability_num]
+        ability_num = struct.unpack("B", self.raw_data[0x14:0x15])[0] # Ability
+        return abilities[ability_num] ## Ability lookup
 
     def nature(self):
-        nature_num = struct.unpack("B", self.raw_data[0x1C:0x1D])[0]
-        return natures[nature_num]
-
+        nature_num = struct.unpack("B", self.raw_data[0x1C:0x1D])[0] ## Nature
+        return naturelookup[nature_num] ## Nature lookup
+    
+####################################################################### EVs
     def ev_hp(self):
-        return str(struct.unpack("B", self.raw_data[0x1E:0x1F])[0])
+        return struct.unpack("B", self.raw_data[0x1E:0x1F])[0] ######## HP EV
     def ev_attack(self):
-        return str(struct.unpack("B", self.raw_data[0x1F:0x20])[0])
+        return struct.unpack("B", self.raw_data[0x1F:0x20])[0] ######## Attack EV
     def ev_defense(self):
-        return str(struct.unpack("B", self.raw_data[0x20:0x21])[0])
+        return struct.unpack("B", self.raw_data[0x20:0x21])[0] ######## Defense EV
     def ev_speed(self):
-        return str(struct.unpack("B", self.raw_data[0x21:0x22])[0])
+        return struct.unpack("B", self.raw_data[0x21:0x22])[0] ######## Speed EV
     def ev_sp_attack(self):
-        return str(struct.unpack("B", self.raw_data[0x22:0x23])[0])
+        return struct.unpack("B", self.raw_data[0x22:0x23])[0] ######## Special attack EV
     def ev_sp_defense(self):
-        return str(struct.unpack("B", self.raw_data[0x23:0x24])[0])
+        return struct.unpack("B", self.raw_data[0x23:0x24])[0] ######## Special defense EV
+    
+#######################################################################
 
+####################################################################### Moves
     def move_1(self):
-        move_num = struct.unpack("<H", self.raw_data[0x5A:0x5C])[0]
+        move_num = struct.unpack("<H", self.raw_data[0x5A:0x5C])[0] ### Move 1
         return moves[move_num]
     def move_2(self):
-        move_num = struct.unpack("<H", self.raw_data[0x5C:0x5E])[0]
+        move_num = struct.unpack("<H", self.raw_data[0x5C:0x5E])[0] ### Move 2
         return moves[move_num]
     def move_3(self):
-        move_num = struct.unpack("<H", self.raw_data[0x5E:0x60])[0]
+        move_num = struct.unpack("<H", self.raw_data[0x5E:0x60])[0] ### Move 3
         return moves[move_num]
     def move_4(self):
-        move_num = struct.unpack("<H", self.raw_data[0x60:0x62])[0]
+        move_num = struct.unpack("<H", self.raw_data[0x60:0x62])[0] ### Move 4
         return moves[move_num]
 
+#######################################################################
+
+####################################################################### IVs
     def iv32(self):
         return struct.unpack("<I", self.raw_data[0x74:0x78])[0]
-
     def iv_hp(self):
-        return str((self.iv32() >> 0) & 0x1F)
+        return (self.iv32() >> 0) & 0x1F ############################## HP IV
     def iv_attack(self):
-        return str((self.iv32() >> 5) & 0x1F)
+        return (self.iv32() >> 5) & 0x1F ############################## Attack IV
     def iv_defense(self):
-        return str((self.iv32() >> 10) & 0x1F)
+        return (self.iv32() >> 10) & 0x1F ############################# Defense IV
     def iv_speed(self):
-        return str((self.iv32() >> 15) & 0x1F)
+        return (self.iv32() >> 15) & 0x1F ############################# Speed IV
     def iv_sp_attack(self):
-        return str((self.iv32() >> 20) & 0x1F)
+        return (self.iv32() >> 20) & 0x1F ############################# Special attack IV
     def iv_sp_defense(self):
-        return str((self.iv32() >> 25) & 0x1F)
+        return (self.iv32() >> 25) & 0x1F ############################# Special defense IV
+    
+
+############################### TEST THESE
+
+    def alt_form(self):
+        return struct.unpack("B",self.raw_data[0x1D:0x1E])[0] ### Fateful encounter, Gender, Alternate form data
+    
+# Bit 0 - Fateful Encounter Flag
+# Bit 1 - Female
+# Bit 2 - Genderless
+# Bit 3-7 - Alternate Forms
+
+    def fatefulencounter(self):
+        fateful = (self.alt_form()) & 1
+        return fateful == 1
+
+    def female(self):
+        female = (self.alt_form() >> 1) & 1
+        gender = 'Female' if female else 'Male'
+        return gender
+
+    def genderless(self):
+        genderless = (self.alt_form() >> 2) & 1
+        return genderless == 1
+
+    def mega(self):
+        return ((self.alt_form() >> 3) & 1) == 1
+
+    def alt_flags(self):
+        for i in range(3,8):
+            yield ((self.alt_form() >> i) & 1) == 1 ## Yield an iterator with all 5 flags
+
+    def statuses(self):
+        return struct.unpack("<B",bytes(self.raw_data[0xE8:0xE9]))[0] ### Status
+
+    def burned(self):
+        burned = (self.statuses() >> 4) & 1
+        return burned == 1
+    
+    def sleepturns(self):
+        return (self.statuses()) % (1 << 3)
+        ### 000 not asleep --> 0
+        ### 001 asleep, but waking up this round --> 1
+        ### 010 asleep, waking up next round --> 2
+        ### 011 asleep, waking up in 2 rounds --> 3
+        ### 100 asleep, waking up in 3 rounds --> 4
+        ### 101 asleep, waking up in 4 rounds --> 5
+        ### 110 asleep, waking up in 5 rounds --> 6
+        ### 111 asleep, waking up in 6 rounds --> 7
+
+    def asleep(self):
+        return self.sleepturns() > 0
+
+    def poisoned(self):
+        poisoned = (self.statuses() >> 3) & 1
+        return poisoned == 1
+    
+    def frozen(self):
+        frozen = (self.statuses() >> 5) & 1
+        return frozen == 1
+    
+    def paralyzed(self):
+        paralyzed = (self.statuses() >> 6) & 1
+        return paralyzed == 1
+    
+    def badlypoisoned(self):
+        badlypoisoned = (self.statuses() >> 7) & 1
+        return badlypoisoned == 1
+
+    def getStatus(self):
+        if self.poisoned():
+            return 'Poisoned'
+        elif self.asleep():
+            return 'Asleep'
+        elif self.frozen():
+            return 'Frozen'
+        elif self.paralyzed():
+            return 'Paralyzed'
+        elif self.burned():
+            return 'Burned'
+        elif self.badlypoisoned():
+            return 'Badly Poisoned'
+        else:
+            return ''
+        
+# Bits 0-2 - Asleep (0-7 rounds)
+# Bit 3 - Poisoned
+# Bit 4 - Burned
+# Bit 5 - Frozen
+# Bit 6 - Paralyzed
+# Bit 7 - Toxic 
+
+#######################################################################
 
     def friendship(self):
-        return str(struct.unpack("B", self.raw_data[0xA2:0xA3])[0])
+        return str(struct.unpack("B", self.raw_data[0xCA:0xCB])[0]) ### Friendship
+    
+    def level_met(self):
+        return struct.unpack("<H", self.raw_data[0xDD:0xDF])[0] ####### Level met
     def level(self):
-        return str(struct.unpack("B", self.raw_data[0xEC:0xED])[0])
-    def held_item_num(self):
-        return struct.unpack("<H", self.raw_data[0xA:0xC])[0]
+        return str(struct.unpack("B", self.raw_data[0xEC:0xED])[0]) ### Current level
     def cur_hp(self):
-        return struct.unpack("<H", self.raw_data[0xF0:0xF2])[0]
+        return struct.unpack("<H", self.raw_data[0xF0:0xF2])[0] ####### Current HP
     def stat_hp(self):
-        return str(struct.unpack("<H", self.raw_data[0xF2:0xF4])[0])
+        return str(struct.unpack("<H", self.raw_data[0xF2:0xF4])[0]) ## Max HP
     def stat_attack(self):
-        return str(struct.unpack("<H", self.raw_data[0xF4:0xF6])[0])
+        return str(struct.unpack("<H", self.raw_data[0xF4:0xF6])[0]) ## Attack stat
     def stat_defense(self):
-        return str(struct.unpack("<H", self.raw_data[0xF6:0xF8])[0])
+        return str(struct.unpack("<H", self.raw_data[0xF6:0xF8])[0]) ## Defense stat
     def stat_speed(self):
-        return str(struct.unpack("<H", self.raw_data[0xF8:0xFA])[0])
+        return str(struct.unpack("<H", self.raw_data[0xF8:0xFA])[0]) ## Speed stat
     def stat_sp_attack(self):
-        return str(struct.unpack("<H", self.raw_data[0xFA:0xFC])[0])
+        return str(struct.unpack("<H", self.raw_data[0xFA:0xFC])[0]) ## Special attack stat
     def stat_sp_defense(self):
-        return str(struct.unpack("<H", self.raw_data[0xFC:0xFE])[0])
+        return str(struct.unpack("<H", self.raw_data[0xFC:0xFE])[0]) ## Special defense stat
 
 class Pokemon6(Pokemon):
     def __init__(self, data):
@@ -364,6 +496,14 @@ class Pokemon6(Pokemon):
 class Pokemon7(Pokemon):
     def __init__(self, data):
         Pokemon.__init__(self, data)
+
+def maxPP(movename):
+    pp = movedata[movename]['pp']
+    return pp
+
+def movePower(movename):
+    pp = movedata[movename]['power']
+    return pp
 
 def get_party_address():
     if 1 == current_game:
@@ -399,100 +539,172 @@ def read_party(c):
                 pass
     return party
 
+def launchHTTP():
+    subprocess.run(["python", "-m", "http.server"]) ## Launches a local http server to allow the DOM/Axios requests
+    print("Please direct an OBS Browser Source to http://localhost/tracker.html or ./tracker.html")
+
 def run():
+    print('running..')
+    threading.Thread(target=launchHTTP).start()
+    htmlfile='tracker.html'
     try:
+        #print('connecting to citra')
         c = Citra()
-        if c.is_connected():
-            first_loop = True
-            last_party = []
-            while True:
-                print("PokeStreamer-Tools Auto-Layout Tool - Gen 6/7\n\n")
-                party = read_party(c)
-
-                if first_loop:
-                    last_party = party
-                    first_loop = False
-                pk=0
-                for pkmn in party:
+        #print('connected to citra')
+        htmltext=''
+        while True:
+            try:
+                if c.is_connected():
+                    #print('reading party')
+                    htmltext='<!DOCTYPE html>\r\n<html>\r\n<head>\r\n\t<title>Gen 6 Tracker</title>\r\n'
+                    htmltext+='\t<link rel="stylesheet" type="text/css" href="tracker.css">\r\n</head>\r\n<body>'
+                    party = read_party(c)
+                    pk=0
+                    #print('read party... performing loop')
+                    htmltext+='<div id="party">\r\n'
+                    for pkmn in party:
+                        if 0 != pkmn.species_num():
+                            flags = []
+                            for flag in pkmn.alt_flags():
+                                flags.append(flag)
+                            pk=pk+1
+                            megaflag = flags[0]
+                            iv_average = (pkmn.iv_hp()+pkmn.iv_attack()+pkmn.iv_defense()+pkmn.iv_sp_attack()+pkmn.iv_sp_defense()+pkmn.iv_speed())/6
+                            if iv_average > 29:
+                                iv_eval = '******'
+                            elif iv_average > 24:
+                                iv_eval = '*****'
+                            elif iv_average > 19:
+                                iv_eval = '****'
+                            elif iv_average > 14:
+                                iv_eval = '***'
+                            elif iv_average > 9:
+                                iv_eval = '**'
+                            elif iv_average > 4:
+                                iv_eval = '*'
+                            else:
+                                iv_eval = '-'
+                            ####
+                            learnedcount = 0
+                            learnlist = movelearndata[str(pkmn.species_num())]
+                            totallearn = 0
+                            for learn in learnlist:
+                                if int(learn) > 1:
+                                    totallearn+=1
+                            for learn in learnlist:
+                                if not int(learn) <= int(pkmn.level()):
+                                    nextmove = learn
+                                    break
+                                elif int(learn) > 1:
+                                    learnedcount+=1
+                            # print("IVs:")
+                            # print(iv_average)
+                            if pk == 1:
+                                pkstyle = "active"
+                            else:
+                                pkstyle = "hidden"
+                            if megaflag:
+                                speciesname = 'Mega '+speciesname
+                                spriteurl = pkmn.species().lower()+'-mega'
+                            else:
+                                spriteurl = pkmn.species().lower()
+                            print(spriteurl)
+                            htmltext+='<div class="pokemon '+pkstyle+'">\r\n\t'
+                            htmltext+='<div class="pokemon-top-block">\r\n\t'
+                            htmltext+='<div class="pokemon-top-left-block">\r\n\t'
+                            htmltext+='<div class="sprite">\r\n\t<img src="https://img.pokemondb.net/sprites/x-y/normal/'+spriteurl+'.png" data-src="https://img.pokemondb.net/sprites/x-y/normal/'+spriteurl+'.png" width="80" height="80">\r\n</div>\r\n\t'
+                            htmltext+='     <div class="species">\r\n\t\t'
+                            htmltext+='         <div class="species-number">#'+str(pkmn.species_num())+'</div>\r\n\t\t'
+                            htmltext+='         <div class="species-name">'+speciesname+'</div>\r\n'
+                            htmltext+='     </div>\r\n' ## close species
+                            htmltext+='<div class="major-stats">\r\n\t'
+                            htmltext+='     <div class="level mstat"><span class="name">Level: </span><span class="value">'+str(pkmn.level())+'</span></div>\r\n\t'
+                            htmltext+='     <div class="hp mstat"><span class="name">HP: </span><span class="current-hp">'+str(pkmn.cur_hp())+'</span><span id="divisor">/</span><span id="max-hp">'+str(pkmn.stat_hp())+'</span></div>\r\n'
+                            htmltext+='     <div class="status mstat"><span class="name">'+pkmn.getStatus()+'</div>'
+                            typestr = '<div class="type">'
+                            ##### TYPES, STATS, ABIILITIES, ETC.
+                            for type in pkmn.types():
+                                typestr+='<img src="images/types/'+type+'.png" height="16" width="18"><span class="type '+type+' name">'+type+'</span>'
+                                if len(pkmn.types()) > 1 and pkmn.types().index(type) == 0:
+                                    typestr+='<span class="type name divider">/</span>'
+                            htmltext+='</div>'
+                            htmltext+='     <div class="types mstat">'+typestr+'</div>'
+                            htmltext+='</div>\r\n' ## Close major stats div
+                            htmltext+='<div class="ability">\r\n\t'
+                            htmltext+='     <div class="ability-name">'+str(pkmn.ability())+'</div>\r\n'
+                            htmltext+='</div>\r\n' ## close ability div
+                            htmltext+='<div class="nature">\r\n\t'
+                            htmltext+='     <div class="nature-name">'+str(pkmn.nature())+'</div>\r\n'
+                            htmltext+='</div>\r\n'
+                            htmltext+='<div class="held-item">\r\n\t'
+                            htmltext+='     <div class="held-item-name">'+pkmn.held_item_name()+'</div>\r\n'
+                            htmltext+='</div>\r\n'
+                            htmltext+='</div>\r\n'
+                            htmltext+='<div class="pokemon-top-right-block">'
+                            ### STATS ########
+                            htmltext+='<div class="stats">\r\n'
+                            raised = natures[pkmn.nature()]['+'].strip()
+                            lowered = natures[pkmn.nature()]['-'].strip()
+                            attackchange,defchange,spatkchange,spdefchange,speedchange = '','','','',''
+                            if 'Attack' == raised:
+                                attackchange = 'raised'
+                            elif 'Attack' == lowered:
+                                attackchange = 'lowered'
+                            if 'Defense' == raised:
+                                defchange = 'raised'
+                            elif 'Defense' == lowered:
+                                defchange = 'lowered'
+                            if 'Sp. Attack' == raised:
+                                spatkchange = 'raised'
+                            elif 'Sp. Attack' == lowered:
+                                spatkchange = 'lowered'
+                            if 'Sp. Defense' == raised:
+                                spdefchange = 'raised'
+                            elif 'Sp. Defense' == lowered:
+                                spdefchange = 'lowered'
+                            if 'Speed' == raised:
+                                speedchange = 'raised'
+                            elif 'Speed' == lowered:
+                                speedchange = 'lowered'
+                            htmltext+='     <div class="iv stat"><span class="name">IVs:</span><span class="value">'+iv_eval+'</span></div>\r\n\t'
+                            htmltext+='     <div class="attack stat '+attackchange+'"><span class="name">Atk:</span><span class="value">'+str(pkmn.stat_attack())+'</span></div>\r\n\t'
+                            htmltext+='     <div class="def stat '+defchange+'"><span class="name">Def:</span><span class="value">'+str(pkmn.stat_defense())+'</span></div>\r\n\t'
+                            htmltext+='     <div class="spatk stat '+spatkchange+'"><span class="name">SpAtk:</span><span class="value">'+str(pkmn.stat_sp_attack())+'</span></div>\r\n\t'
+                            htmltext+='     <div class="spdef stat '+spdefchange+'"><span class="name">SpDef:</span><span class="value">'+str(pkmn.stat_sp_defense())+'</span></div>\r\n\t'
+                            htmltext+='     <div class="speed stat '+speedchange+'"><span class="name">Speed:</span><span class="value">'+str(pkmn.stat_speed())+'</span></div>\r\n\t'
+                            htmltext+='     <div class="bst stat"><span class="name">BST:</span><span class="value">'+str(pkmn.bst())+'</span></div>\r\n\t'
+                            htmltext+='</div>' ## Close stats div
+                            htmltext+='</div>' ## Close top right block
+                            htmltext+='</div>' ## Close top block
+                            htmltext+='<div class="pokemon-bottom-block">\r\n\t'
+                            ### MOVES ########
+                            htmltext+='<div class="moves">\r\n\t'
+                            htmltext+='     <div class="move label"><div class="move category label">Moves '+str(learnedcount)+'/'+str(totallearn)+' ('+str(nextmove)+')</div><div class="move name label"></div><div class="move maxpp label">PP</div><div class="move power label">BP</div><div class="move accuracy label">Acc</div><div class="move contact label">C</div></div>\r\n\t'
+                            htmltext+='     <div class="move '+movedata[pkmn.move_1()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_1()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_1()+'</div><div class="move maxpp">'+maxPP(pkmn.move_1())+'</div><div class="move power">'+('-' if movePower(pkmn.move_1()) == '0' else movePower(pkmn.move_1()))+'</div><div class="move accuracy">'+movedata[pkmn.move_1()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_1()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
+                            htmltext+='     <div class="move '+movedata[pkmn.move_2()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_2()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_2()+'</div><div class="move maxpp">'+maxPP(pkmn.move_2())+'</div><div class="move power">'+('-' if movePower(pkmn.move_2()) == '0' else movePower(pkmn.move_2()))+'</div><div class="move accuracy">'+movedata[pkmn.move_2()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_2()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
+                            htmltext+='     <div class="move '+movedata[pkmn.move_3()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_3()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_3()+'</div><div class="move maxpp">'+maxPP(pkmn.move_3())+'</div><div class="move power">'+('-' if movePower(pkmn.move_3()) == '0' else movePower(pkmn.move_3()))+'</div><div class="move accuracy">'+movedata[pkmn.move_3()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_3()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
+                            htmltext+='     <div class="move '+movedata[pkmn.move_4()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_4()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_4()+'</div><div class="move maxpp">'+maxPP(pkmn.move_4())+'</div><div class="move power">'+('-' if movePower(pkmn.move_4()) == '0' else movePower(pkmn.move_4()))+'</div><div class="move accuracy">'+movedata[pkmn.move_4()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_4()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
+                            htmltext+='</div>\r\n' ## Close moves div
+                            htmltext+='</div>' ## Close bottom block
+                            htmltext+='</div>' ## Close pokemon div
+                    htmltext+='</div><button id="previous-button">&#8249;</button><button id="next-button">&#8250;</button><script src="reload.js"></script></body></html>' ## Draw the next/previous arrows, close party div, body and HTML
+                    with open(htmlfile, "w",encoding='utf-8') as f:
+                        f.write(htmltext)
+                    time.sleep(5)
+            except Exception as e:
+                with open('errorlog.txt','a+') as f:
+                    errorLog = str(datetime.now())+": "+str(e)+'\n'
+                    f.write(errorLog)
+                traceback.print_exc()
+                time.sleep(5)
+                print(errorLog)
+                if "WinError 10054" in str(e):
+                    print("To continue using the tracker, please open a ROM.")
+                    print("Waiting for a ROM...")
+                    time.sleep(15)
                     
-                    if 0 != pkmn.species_num():
-                        pk=pk+1
-                        print("Species: " + pkmn.species() + "  Ability: " + pkmn.ability() + "  Nature: " + pkmn.nature() + "\n")
-                        trackertemp[str(pk)]["mon"]=pkmn.species()
-                        trackertemp[str(pk)]["ability"]=pkmn.ability()
-                        trackertemp[str(pk)]["nature"]=pkmn.nature()
-                        print("Moves: " + pkmn.move_1() + ", " + pkmn.move_2() + ", " + pkmn.move_3() + ", " + pkmn.move_4() + "\n")
-                        trackertemp[str(pk)]["currhp"]=pkmn.cur_hp()
-                        trackertemp[str(pk)]["move1"]=pkmn.move_1()
-                        trackertemp[str(pk)]["move2"]=pkmn.move_2()
-                        trackertemp[str(pk)]["move3"]=pkmn.move_3()
-                        trackertemp[str(pk)]["move4"]=pkmn.move_4()
-                        trackertemp[str(pk)]["item"]=str(pkmn.held_item_num())
-                        print("Stats: " + pkmn.stat_hp() + "/" + pkmn.stat_attack() + "/" + pkmn.stat_defense() + "/" + pkmn.stat_sp_attack() + "/" + pkmn.stat_sp_defense() + "/" + pkmn.stat_speed() + "\n")
-                        trackertemp[str(pk)]["maxhp"]=pkmn.stat_hp()
-                        trackertemp[str(pk)]["atk"]=pkmn.stat_attack()
-                        trackertemp[str(pk)]["def"]=pkmn.stat_defense()
-                        trackertemp[str(pk)]["spa"]=pkmn.stat_sp_attack()
-                        trackertemp[str(pk)]["spd"]=pkmn.stat_sp_defense()
-                        trackertemp[str(pk)]["spe"]=pkmn.stat_speed()
-                        print("Level: " + pkmn.level() + "  Friendship: " + pkmn.friendship() + "\n")
-                        trackertemp[str(pk)]["level"]=pkmn.level()
-                        trackertemp[str(pk)]["friendship"]=pkmn.friendship()
-                    else:
-                        pk=pk+1
-                        trackertemp[str(pk)]["mon"]="-"
-                        trackertemp[str(pk)]["ability"]=""
-                        trackertemp[str(pk)]["nature"]=""
-                        trackertemp[str(pk)]["currhp"]=""
-                        trackertemp[str(pk)]["move1"]=""
-                        trackertemp[str(pk)]["move2"]=""
-                        trackertemp[str(pk)]["move3"]=""
-                        trackertemp[str(pk)]["move4"]=""
-                        trackertemp[str(pk)]["item"]=""
-                        trackertemp[str(pk)]["maxhp"]=""
-                        trackertemp[str(pk)]["atk"]=""
-                        trackertemp[str(pk)]["def"]=""
-                        trackertemp[str(pk)]["spa"]=""
-                        trackertemp[str(pk)]["spd"]=""
-                        trackertemp[str(pk)]["spe"]=""
-                        trackertemp[str(pk)]["level"]=""
-                        trackertemp[str(pk)]["friendship"]=""
-                trackertempfile=r"trackertemp.json"
-                with open(trackertempfile, "w") as f:
-                    json.dump(trackertemp, f)
-                    f.close()
-                if manage_sprites:
-                    for i in range(6):
-##                        if last_party[i].species_num() != party[i].species_num():
-                            print(str(last_party[i].species_num()) + " -> " + str(party[i].species_num()))
-
-                            # First, try to copy by species number
-                            copied = False
-                            try:
-                                species_num = party[i].species_num()
-                                if 0 == species_num:
-                                    shutil.copyfile("000.png", "p" + str(i + 1) + ".png")
-                                    print("000.png -> " + "p" + str(i + 1) + ".png")
-                                    copied = True
-                                else:
-                                    shutil.copyfile(str(species_num) + ".png", "p" + str(i + 1) + ".png")
-                                    print(str(species_num) + ".png -> " + "p" + str(i + 1) + ".png")
-                                    copied = True
-                            except:
-                                pass
-                            if not copied:
-                                # If that failed, try to copy by species name
-                                try:
-                                    shutil.copyfile(party[i].species().lower() + ".png", "p" + str(i + 1) + ".png")
-                                    print(party[i].species().lower() + ".png -> " + "p" + str(i + 1) + ".png")
-                                except:
-                                    print("ERROR") 
-                                    pass
-
-                last_party = party
-                time.sleep(10)
-        else: print("Failed to connect to Citra RPC Server")  
     finally:
         print("")
+
 if "__main__" == __name__:
     run()
