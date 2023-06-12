@@ -302,13 +302,15 @@ class Pokemon:
         return species[self.species_num()] ############################ Species name
 
     def name(self):
-        speciesname = self.species().replace("Farfetchd","Farfetch&#x27;d")
+        speciesname = self.species()
         if self.mega():
             pokemonname = 'Mega '+speciesname
+        else:
+            pokemonname = speciesname
         return pokemonname
 
     def bst(self):
-        return mondata[self.species()]['bst']
+        return mondata[self.name()]['bst']
     
     def types(self):
         return mondata[self.species()]['types']
@@ -345,16 +347,63 @@ class Pokemon:
 ####################################################################### Moves
     def move_1(self):
         move_num = struct.unpack("<H", self.raw_data[0x5A:0x5C])[0] ### Move 1
-        return moves[move_num]
+        movename = moves[move_num]
+        move = {
+            'name':movename,
+            'pp':struct.unpack("<B",self.raw_data[0x62:0x63])[0],
+            'maxpp':movedata[movename]['pp'],
+            'type':movedata[movename]['type'],
+            'power':movedata[movename]['power'],
+            'acc':movedata[movename]['acc'],
+            'contact':movedata[movename]['contact'],
+            'category':movedata[movename]['detail']
+        }
+        return move
+    
     def move_2(self):
         move_num = struct.unpack("<H", self.raw_data[0x5C:0x5E])[0] ### Move 2
-        return moves[move_num]
+        movename = moves[move_num]
+        move = {
+            'name':movename,
+            'pp':struct.unpack("<B",self.raw_data[0x63:0x64])[0],
+            'maxpp':movedata[movename]['pp'],
+            'type':movedata[movename]['type'],
+            'power':movedata[movename]['power'],
+            'acc':movedata[movename]['acc'],
+            'contact':movedata[movename]['contact'],
+            'category':movedata[movename]['detail']
+        }
+        return move
+    
     def move_3(self):
         move_num = struct.unpack("<H", self.raw_data[0x5E:0x60])[0] ### Move 3
-        return moves[move_num]
+        movename = moves[move_num]
+        move = {
+            'name':movename,
+            'pp':struct.unpack("<B",self.raw_data[0x64:0x65])[0],
+            'maxpp':movedata[movename]['pp'],
+            'type':movedata[movename]['type'],
+            'power':movedata[movename]['power'],
+            'acc':movedata[movename]['acc'],
+            'contact':movedata[movename]['contact'],
+            'category':movedata[movename]['detail']
+        }
+        return move
+    
     def move_4(self):
         move_num = struct.unpack("<H", self.raw_data[0x60:0x62])[0] ### Move 4
-        return moves[move_num]
+        movename = moves[move_num]
+        move = {
+            'name':movename,
+            'pp':struct.unpack("<B",self.raw_data[0x65:0x66])[0],
+            'maxpp':movedata[movename]['pp'],
+            'type':movedata[movename]['type'],
+            'power':movedata[movename]['power'],
+            'acc':movedata[movename]['acc'],
+            'contact':movedata[movename]['contact'],
+            'category':movedata[movename]['detail']
+        }
+        return move
 
 #######################################################################
 
@@ -497,14 +546,6 @@ class Pokemon7(Pokemon):
     def __init__(self, data):
         Pokemon.__init__(self, data)
 
-def maxPP(movename):
-    pp = movedata[movename]['pp']
-    return pp
-
-def movePower(movename):
-    pp = movedata[movename]['power']
-    return pp
-
 def get_party_address():
     if 1 == current_game:
         return 0x8CE1CE8
@@ -603,19 +644,17 @@ def run():
                                 pkstyle = "active"
                             else:
                                 pkstyle = "hidden"
-                            if megaflag:
-                                speciesname = 'Mega '+speciesname
+                            if pkmn.mega():
                                 spriteurl = pkmn.species().lower()+'-mega'
                             else:
                                 spriteurl = pkmn.species().lower()
-                            print(spriteurl)
                             htmltext+='<div class="pokemon '+pkstyle+'">\r\n\t'
                             htmltext+='<div class="pokemon-top-block">\r\n\t'
                             htmltext+='<div class="pokemon-top-left-block">\r\n\t'
                             htmltext+='<div class="sprite">\r\n\t<img src="https://img.pokemondb.net/sprites/x-y/normal/'+spriteurl+'.png" data-src="https://img.pokemondb.net/sprites/x-y/normal/'+spriteurl+'.png" width="80" height="80">\r\n</div>\r\n\t'
                             htmltext+='     <div class="species">\r\n\t\t'
                             htmltext+='         <div class="species-number">#'+str(pkmn.species_num())+'</div>\r\n\t\t'
-                            htmltext+='         <div class="species-name">'+speciesname+'</div>\r\n'
+                            htmltext+='         <div class="species-name">'+pkmn.name().replace("Farfetchd","Farfetch&#x27;d")+'</div>\r\n'
                             htmltext+='     </div>\r\n' ## close species
                             htmltext+='<div class="major-stats">\r\n\t'
                             htmltext+='     <div class="level mstat"><span class="name">Level: </span><span class="value">'+str(pkmn.level())+'</span></div>\r\n\t'
@@ -680,10 +719,14 @@ def run():
                             ### MOVES ########
                             htmltext+='<div class="moves">\r\n\t'
                             htmltext+='     <div class="move label"><div class="move category label">Moves '+str(learnedcount)+'/'+str(totallearn)+' ('+str(nextmove)+')</div><div class="move name label"></div><div class="move maxpp label">PP</div><div class="move power label">BP</div><div class="move accuracy label">Acc</div><div class="move contact label">C</div></div>\r\n\t'
-                            htmltext+='     <div class="move '+movedata[pkmn.move_1()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_1()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_1()+'</div><div class="move maxpp">'+maxPP(pkmn.move_1())+'</div><div class="move power">'+('-' if movePower(pkmn.move_1()) == '0' else movePower(pkmn.move_1()))+'</div><div class="move accuracy">'+movedata[pkmn.move_1()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_1()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
-                            htmltext+='     <div class="move '+movedata[pkmn.move_2()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_2()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_2()+'</div><div class="move maxpp">'+maxPP(pkmn.move_2())+'</div><div class="move power">'+('-' if movePower(pkmn.move_2()) == '0' else movePower(pkmn.move_2()))+'</div><div class="move accuracy">'+movedata[pkmn.move_2()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_2()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
-                            htmltext+='     <div class="move '+movedata[pkmn.move_3()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_3()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_3()+'</div><div class="move maxpp">'+maxPP(pkmn.move_3())+'</div><div class="move power">'+('-' if movePower(pkmn.move_3()) == '0' else movePower(pkmn.move_3()))+'</div><div class="move accuracy">'+movedata[pkmn.move_3()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_3()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
-                            htmltext+='     <div class="move '+movedata[pkmn.move_4()]['type']+'"><div class="move category"><img src="images/categories/'+movedata[pkmn.move_4()]['detail']+'.png" height="15" width="22"></div><div class="move name">'+pkmn.move_4()+'</div><div class="move maxpp">'+maxPP(pkmn.move_4())+'</div><div class="move power">'+('-' if movePower(pkmn.move_4()) == '0' else movePower(pkmn.move_4()))+'</div><div class="move accuracy">'+movedata[pkmn.move_4()]['acc'].replace('%','')+'</div><div class="move contact">'+movedata[pkmn.move_4()]['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
+                            for move in [pkmn.move_1(),pkmn.move_2(),pkmn.move_3(),pkmn.move_4()]:
+                                htmltext+='     <div class="move '+move['type']+'">'
+                                htmltext+='         <div class="move category"><img src="images/categories/'+move['category']+'.png" height="15" width="22"></div>'
+                                htmltext+='         <div class="move name">'+move['name']+'</div>'
+                                htmltext+='         <div class="move maxpp">'+str(move['pp'])+'/'+str(move['maxpp'])+'</div>'
+                                htmltext+='         <div class="move power">'+str('-' if move['power'] == '0' else move['power'])+'</div>'
+                                htmltext+='         <div class="move accuracy">'+move['acc'].replace('%','')+'</div>'
+                                htmltext+='         <div class="move contact">'+move['contact'].replace("Co.","Y").replace('NC','N')+'</div></div>\r\n\t'
                             htmltext+='</div>\r\n' ## Close moves div
                             htmltext+='</div>' ## Close bottom block
                             htmltext+='</div>' ## Close pokemon div
