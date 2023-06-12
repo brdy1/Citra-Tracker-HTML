@@ -656,18 +656,16 @@ def run():
                             htmltext+='         <div class="species-number">#'+str(pkmn.species_num())+'</div>\r\n\t\t'
                             htmltext+='         <div class="species-name">'+pkmn.name().replace("Farfetchd","Farfetch&#x27;d")+'</div>\r\n'
                             htmltext+='     </div>\r\n' ## close species
-                            htmltext+='<div class="major-stats">\r\n\t'
-                            htmltext+='     <div class="level mstat"><span class="name">Level: </span><span class="value">'+str(pkmn.level())+'</span></div>\r\n\t'
-                            htmltext+='     <div class="hp mstat"><span class="name">HP: </span><span class="current-hp">'+str(pkmn.cur_hp())+'</span><span id="divisor">/</span><span id="max-hp">'+str(pkmn.stat_hp())+'</span></div>\r\n'
-                            htmltext+='     <div class="status mstat"><span class="name">'+pkmn.getStatus()+'</div>'
                             typestr = '<div class="type">'
                             ##### TYPES, STATS, ABIILITIES, ETC.
                             for type in pkmn.types():
-                                typestr+='<img src="images/types/'+type+'.png" height="16" width="18"><span class="type '+type+' name">'+type+'</span>'
-                                if len(pkmn.types()) > 1 and pkmn.types().index(type) == 0:
-                                    typestr+='<span class="type name divider">/</span>'
-                            htmltext+='</div>'
+                                typestr+='<img src="images/types/'+type+'.png" height="16" width="18"><span class="type '+type+' name">'+type+' </span>'
+                            htmltext+='<div class="major-stats">\r\n\t'
                             htmltext+='     <div class="types mstat">'+typestr+'</div>'
+                            htmltext+='     <div class="level mstat"><span class="name">Level: </span><span class="value">'+str(pkmn.level())+'</span></div>\r\n\t'
+                            htmltext+='     <div class="status mstat"><span class="name">'+pkmn.getStatus()+'</span></div>'
+                            htmltext+='</div>'
+ 
                             htmltext+='</div>\r\n' ## Close major stats div
                             htmltext+='<div class="ability">\r\n\t'
                             htmltext+='     <div class="ability-name">'+str(pkmn.ability())+'</div>\r\n'
@@ -705,7 +703,7 @@ def run():
                                 speedchange = 'raised'
                             elif 'Speed' == lowered:
                                 speedchange = 'lowered'
-                            htmltext+='     <div class="iv stat"><span class="name">IVs:</span><span class="value">'+iv_eval+'</span></div>\r\n\t'
+                            htmltext+='     <div class="hp stat"><span class="name">HP: </span><span class="value">'+str(pkmn.cur_hp())+'/'+str(pkmn.stat_hp())+'</span></div>\r\n'
                             htmltext+='     <div class="attack stat '+attackchange+'"><span class="name">Atk:</span><span class="value">'+str(pkmn.stat_attack())+'</span></div>\r\n\t'
                             htmltext+='     <div class="def stat '+defchange+'"><span class="name">Def:</span><span class="value">'+str(pkmn.stat_defense())+'</span></div>\r\n\t'
                             htmltext+='     <div class="spatk stat '+spatkchange+'"><span class="name">SpAtk:</span><span class="value">'+str(pkmn.stat_sp_attack())+'</span></div>\r\n\t'
@@ -721,7 +719,7 @@ def run():
                             htmltext+='     <div class="move label"><div class="move category label">Moves '+str(learnedcount)+'/'+str(totallearn)+' ('+str(nextmove)+')</div><div class="move name label"></div><div class="move maxpp label">PP</div><div class="move power label">BP</div><div class="move accuracy label">Acc</div><div class="move contact label">C</div></div>\r\n\t'
                             for move in [pkmn.move_1(),pkmn.move_2(),pkmn.move_3(),pkmn.move_4()]:
                                 htmltext+='     <div class="move '+move['type']+'">'
-                                htmltext+='         <div class="move category"><img src="images/categories/'+move['category']+'.png" height="15" width="22"></div>'
+                                htmltext+='         <div class="move category"><img src="images/categories/'+move['category']+'.png" height="13" width="18"></div>'
                                 htmltext+='         <div class="move name">'+move['name']+'</div>'
                                 htmltext+='         <div class="move maxpp">'+str(move['pp'])+'/'+str(move['maxpp'])+'</div>'
                                 htmltext+='         <div class="move power">'+str('-' if move['power'] == '0' else move['power'])+'</div>'
