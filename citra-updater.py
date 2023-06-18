@@ -33,7 +33,7 @@ def getURLAbbr():
     elif gamegroupabbreviation == 'ORAS':
         return 'omega-ruby-alpha-sapphire/dex' ## ORAS sprites end in /dex
     else:
-        return 'bank' ## pokemon db does not have gen 7 sprites for some reason
+        return 'home' ## pokemon db does not have gen 7 sprites for some reason, so will default to using the 3d home images
 # -----------------------------------------------------------------------------
 ## Change these to dictionaries or use sqlite - this is just dex number anyway right?
 
@@ -686,11 +686,11 @@ def run():
                             ### MOVES ########
                             totallearn,nextmove,learnedcount,learnstr = pkmn.getMoves()
                             htmltext+='<div class="moves">\r\n\t'
-                            counts = pkmn.getCoverage()
-                            countstr = ''
-                            for dmg,count in counts:
-                                countstr+='<div class="damage-bracket">['+str(dmg)+'x]</div>'
-                                countstr+='<div class="bracket-count">'+str(count)+'</div>'
+                            # counts = pkmn.getCoverage()
+                            # countstr = ''
+                            # for dmg,count in counts:
+                            #     countstr+='<div class="damage-bracket">['+str(dmg)+'x]</div>'
+                            #     countstr+='<div class="bracket-count">'+str(count)+'</div>'
                             nmove = (' - ' if not nextmove else nextmove)
                             htmltext+=f'     <div class="move label"><div class="move category label"><div class="learnset">{learnstr}</div>Moves {learnedcount}/{totallearn} ({nmove})</div><div class="move name label"></div><div class="move maxpp label">PP</div><div class="move power label">BP</div><div class="move accuracy label">Acc</div><div class="move contact label">C</div></div>\r\n\t'
                             for move in pkmn.moves:
