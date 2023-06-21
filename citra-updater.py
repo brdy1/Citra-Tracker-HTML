@@ -294,7 +294,6 @@ class Pokemon:
                                 left join "pokemon.type" ty on gm.typeid = ty.typeid
                                 left join "pokemon.movecategory" mc on gm.movecategoryid = mc.movecategoryid
                             where ml.moveindex = {move_num} and gm.generationid = {gen}"""
-                        print(query)
                         movename,id,pp,type,power,acc,contact,category = cursor.execute(query).fetchone()
                         yield {'name':movename,
                             'description':movedescription(id),
@@ -348,27 +347,19 @@ class Pokemon:
         except:
             self.evo = False
         self.statusbyte = struct.unpack("<B",self.raw_data[0xE8:0xE9])[0] ### Status byte
-        self.poisoned = (self.statusbyte == 5) ### Checked and confirmed
-        self.burned = (self.statusbyte == 4) ### Checked and confirmed
-        self.paralyzed = (self.statusbyte == 1) ### Checked and confirmed
-        self.asleep = (self.statusbyte == 2) ### Checked and confirmed
-        self.frozen = (self.statusbyte == 3) ### presumptive only
-
-    def getStatus(self):
-        if self.burned:
-            return 'Burned'
-        elif self.poisoned:
-            return 'Poisoned'
-        # elif self.frozen:
-        #     return 'Frozen'
-        elif self.paralyzed:
-            return 'Paralyzed'
-        # elif self.badlypoisoned(): ## Doesn't exist in this party data
-        # #     return 'Badly Poisoned'
-        elif self.asleep:
-            return 'Asleep'
-        else:
-            return ''
+        match self.statusbyte:
+            case 1:
+                self.status = 'Paralyzed'
+            case 2:
+                self.status = 'Asleep'
+            case 3:
+                self.status = 'Frozen'
+            case 4:
+                self.status = 'Burned'
+            case 5:
+                self.status = 'Poisoned'
+            case _:
+                self.status = ''
         
     def getStatChanges(self):
             raised,lowered = cursor.execute(f"""
@@ -642,7 +633,7 @@ def run():
                             else:
                                 evohtml=''
                             htmltext+=f'     <div class="level mstat"><span class="level name">Level: </span><span class="level value">'+str(pkmn.level)+f'</span>{evohtml}</div>\r\n\t'
-                            if pkmn.getStatus() != '':
+                            if pkmn.status != '':
                                 htmltext+='     <div class="status mstat"><img src="images/statuses/'+pkmn.getStatus()+'.png" height="25" width="40"></div>'
                             else:
                                 htmltext+='     <div class="status mstat"></div>'
