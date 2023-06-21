@@ -6,47 +6,12 @@ import json
 import sqlite3
 import threading
 import traceback
-import sys
+from configparser import ConfigParser
 from datetime import datetime
 from citra import Citra
 
-# Create a SQLite database and connect to it
-conn = sqlite3.connect("data/gen67.sqlite")
-cursor = conn.cursor()
 
-def getGame():
-    return 'X/Y' ### Let's do some kind of checksum here
 
-game = getGame()
-
-gamegroupid,gamegroupabbreviation,gen = cursor.execute(f"""
-        select
-            gg.gamegroupid
-            ,gg.gamegroupabbreviation
-            ,gg.generationid
-        from "pokemon.gamegroup" gg
-        where gamegroupname = '{game}'""").fetchone()
-
-def getURLAbbr():
-    if gamegroupabbreviation == 'XY':
-        return 'x-y'
-    elif gamegroupabbreviation == 'ORAS':
-        return 'omega-ruby-alpha-sapphire/dex' ## ORAS sprites end in /dex
-    else:
-        return 'home' ## pokemon db does not have gen 7 sprites for some reason, so will default to using the 3d home images
-# -----------------------------------------------------------------------------
-## Change these to dictionaries or use sqlite - this is just dex number anyway right?
-
-with open('data/item-data.json','r') as f:
-    items = json.loads(f.read())
-
-# -----------------------------------------------------------------------------
-
-BLOCK_SIZE = 56
-SLOT_OFFSET = 484
-SLOT_DATA_SIZE = (8 + (4 * BLOCK_SIZE))
-STAT_DATA_OFFSET = 112
-STAT_DATA_SIZE = 22
 
 def crypt(data, seed, i):
     value = data[i]
@@ -121,7 +86,7 @@ class Pokemon:
         else:
             return 0
 
-    def getAtts(self):
+    def getAtts(self,gamegroupid,gen):
         dex = self.species_num()
         form = struct.unpack("B",self.raw_data[0x1D:0x1E])[0]
         query = f"""select pokemonid from "pokemon.pokemon" where pokemonpokedexnumber = {dex}"""
@@ -240,7 +205,7 @@ class Pokemon:
         self.suffix = self.suffix or ''
         self.name = self.name.replace(' Form','').replace(' Cloak','')
         self.spritename = self.species.lower()+('' if self.suffix == '' else ('-'+self.suffix))
-        self.spriteurl = "https://img.pokemondb.net/sprites/"+getURLAbbr()+"/normal/"+self.spritename+".png"
+        self.spriteurl = "https://img.pokemondb.net/sprites/"+getURLAbbr(gamegroupid)+"/normal/"+self.spritename+".png"
         self.bst = cursor.execute(f"""select
                                 sum(pokemonstatvalue)
                             from "pokemon.pokemonstat"
@@ -267,7 +232,8 @@ class Pokemon:
                     from "pokemon.generationability" ga
                         left join "pokemon.ability" ab on ga.abilityid = ab.abilityid
                         left join "pokemon.abilitylookup" al on ab.abilityname = al.abilityname
-                    where al.abilityindex = {self.ability_num}
+                    where al.abilityindex = {self.ability_num} and ga.generationid <= {gen}
+                    order by ga.generationid desc
                     """
         self.abilityname,self.abilitydescription = cursor.execute(query).fetchone()
         self.ability = {'name':self.abilityname,'description':self.abilitydescription}
@@ -310,33 +276,46 @@ class Pokemon:
                 move3 = ((0x5E,0x60),(0x64,0x65))
                 move4 = ((0x60,0x62),(0x65,0x66))
                 for ml,pl in (move1,move2,move3,move4):
-                    move_num = struct.unpack("<H", self.raw_data[ml[0]:ml[1]])[0]
-                    movename,id,pp,type,power,acc,contact,category = cursor.execute(f"""
-                        select
-                            mv.movename,
-                            gm.generationmoveid,
-                            movepp,
-                            typename,
-                            movepower,
-                            moveaccuracy,
-                            movecontactflag,
-                            movecategoryname
-                        from "pokemon.generationmove" gm
-                            left join "pokemon.move" mv on gm.moveid = mv.moveid
-                            left join "pokemon.movelookup" ml on mv.movename = ml.movename
-                            left join "pokemon.type" ty on gm.typeid = ty.typeid
-                            left join "pokemon.movecategory" mc on gm.movecategoryid = mc.movecategoryid
-                        where ml.moveindex = {move_num} and gm.generationid = {gen}""").fetchone()
-                    yield {'name':movename,
-                        'description':movedescription(id),
-                            'pp':struct.unpack("<B",self.raw_data[pl[0]:pl[1]])[0],
-                            'maxpp':int(pp),
-                            'type':type,
-                            'power':power,
-                            'acc':acc,
-                            'contact':contact,
-                            'category':category
-                        }
+                    try:
+                        move_num = struct.unpack("<H", self.raw_data[ml[0]:ml[1]])[0]
+                        query = f"""
+                            select
+                                mv.movename,
+                                gm.generationmoveid,
+                                movepp,
+                                typename,
+                                movepower,
+                                moveaccuracy,
+                                movecontactflag,
+                                movecategoryname
+                            from "pokemon.generationmove" gm
+                                left join "pokemon.move" mv on gm.moveid = mv.moveid
+                                left join "pokemon.movelookup" ml on mv.movename = ml.movename
+                                left join "pokemon.type" ty on gm.typeid = ty.typeid
+                                left join "pokemon.movecategory" mc on gm.movecategoryid = mc.movecategoryid
+                            where ml.moveindex = {move_num} and gm.generationid = {gen}"""
+                        print(query)
+                        movename,id,pp,type,power,acc,contact,category = cursor.execute(query).fetchone()
+                        yield {'name':movename,
+                            'description':movedescription(id),
+                                'pp':struct.unpack("<B",self.raw_data[pl[0]:pl[1]])[0],
+                                'maxpp':int(pp),
+                                'type':type,
+                                'power':power,
+                                'acc':acc,
+                                'contact':contact,
+                                'category':category
+                            }
+                    except:
+                        yield {'name':'',
+                               'description':'',
+                               'pp':0,
+                               'maxpp':0,
+                                'type':None,
+                                'power':0,
+                                'acc':0,
+                                'contact':False,
+                                'category':None}
                     
         self.moves = [move for move in moves(self)]
         try:
@@ -360,7 +339,7 @@ class Pokemon:
                                                             SELECT
                                                                 gamegrouporder
                                                             FROM "pokemon.gamegroup"
-                                                                WHERE gamegroupname = '{game}'
+                                                                WHERE gamegroupid = '{gamegroupid}'
                                                             )
                                                     )
                                                 AND basepokemonid = {str(self.id)}
@@ -409,7 +388,7 @@ class Pokemon:
                 else:
                     yield ''
 
-    def getMoves(self):
+    def getMoves(self,gamegroupid):
         learnedcount = 0
         query = f"""
             select
@@ -438,7 +417,7 @@ class Pokemon:
                 learnedcount+=1
         return totallearn,nextmove,learnedcount,learnstr[0:len(learnstr)-2]
 
-    def getCoverage(self):
+    def getCoverage(self,gen,gamegroupid):
         types = []
         for move in self.moves:
             if move['power']:
@@ -526,25 +505,23 @@ class Pokemon7(Pokemon):
     def __init__(self, data):
         Pokemon.__init__(self, data)
 
-def get_party_address():
-    if game == 'X/Y':
-        return 0x8CE1CE8
-    # elif 2 == current_game:
-    #     return 0x8CF727C
-    # elif 3 == current_game:
-    #     return 0x34195E10
-    # elif 4 == current_game:
-    #     return 0x33F7FA44
-    else:
-        return 0
+def getGame():
+    config = ConfigParser()
+    config.read('config.ini')
+    partyaddresses = {
+        'X/Y':0x8CE1CE8,
+        'OmegaRuby/AlphaSapphire':0x8CF727C,
+        'Sun/Moon':0x34195E10,
+        'UltraSun/UltraMoon':0x33F7FA44
+    }
+    game = config['config']['game']
+    return game,(partyaddresses[game] or 0)
 
 def cls():
     os.system('cls' if os.name=='nt' else 'clear')
 
-def read_party(c):
-    party = []
-    party_address = get_party_address()
-    
+def read_party(c,party_address):
+    party = []    
     for i in range(6):
         read_address = party_address + (i * SLOT_OFFSET)
         party_data = c.read_memory(read_address, SLOT_DATA_SIZE)
@@ -552,10 +529,7 @@ def read_party(c):
         if party_data and stats_data:
             data = party_data + stats_data
             try:
-                if gen == 6:
-                    pokemon = Pokemon6(data)
-                elif gen == 7:
-                    pokemon = Pokemon7(data)
+                pokemon = Pokemon6(data)
                 party.append(pokemon)
             except ValueError:
                 traceback.print_exc()
@@ -589,8 +563,24 @@ def calcPower(pkmn,move):
         return int(int(pkmn.cur_hp())/int(pkmn.stat_hp())*150)
     else:
         return ('-' if not move['power'] else int(move['power']))
+    
+def getURLAbbr(game):
+    if game == 15:
+        return 'x-y'
+    elif game == 16:
+        return 'omega-ruby-alpha-sapphire/dex' ## ORAS sprites end in /dex
+    else:
+        return 'sun-moon'
 
 def run():
+    game,party_address = getGame()
+    gamegroupid,gamegroupabbreviation,gen = cursor.execute(f"""
+            select
+                gg.gamegroupid
+                ,gg.gamegroupabbreviation
+                ,gg.generationid
+            from "pokemon.gamegroup" gg
+            where gamegroupname = '{game}'""").fetchone()
     print('running..')
     threading.Thread(target=launchHTTP).start()
     htmlfile='tracker.html'
@@ -606,13 +596,13 @@ def run():
                     #print('reading party')
                     htmltext='<!DOCTYPE html>\r\n<html>\r\n<head>\r\n\t<title>Gen 6 Tracker</title>\r\n'
                     htmltext+='\t<link rel="stylesheet" type="text/css" href="tracker.css">\r\n</head>\r\n<body>'
-                    party = read_party(c)
+                    party = read_party(c,party_address)
                     pk=0
                     #print('read party... performing loop')
                     htmltext+='<div id="party">\r\n'
                     for pkmn in party:
                         if pkmn.species_num() != 0: ### Make sure the slot is valid & not an egg
-                            pkmn.getAtts()
+                            pkmn.getAtts(gamegroupid,gen)
                             if int(pkmn.cur_hp) > 5000: ### Make sure the memory dump hasn't happened (or whatever causes the invalid values)
                                 continue
                             if pkmn.species_num() > 1000: ### Make sure the memory dump hasn't happened (or whatever causes the invalid values)
@@ -684,9 +674,9 @@ def run():
                             htmltext+='</div>' ## Close top block
                             htmltext+='<div class="pokemon-bottom-block">\r\n\t'
                             ### MOVES ########
-                            totallearn,nextmove,learnedcount,learnstr = pkmn.getMoves()
+                            totallearn,nextmove,learnedcount,learnstr = pkmn.getMoves(gamegroupid)
                             htmltext+='<div class="moves">\r\n\t'
-                            # counts = pkmn.getCoverage()
+                            # counts = pkmn.getCoverage(gen,gamegroupid)
                             # countstr = ''
                             # for dmg,count in counts:
                             #     countstr+='<div class="damage-bracket">['+str(dmg)+'x]</div>'
@@ -729,9 +719,23 @@ def run():
                     print("To continue using the tracker, please open a ROM.")
                     print("Waiting for a ROM...")
                     time.sleep(15)
+                    game,party_address = getGame()
                     
     finally:
         print("")
 
-if "__main__" == __name__:
+BLOCK_SIZE = 56
+SLOT_OFFSET = 484
+SLOT_DATA_SIZE = (8 + (4 * BLOCK_SIZE))
+STAT_DATA_OFFSET = 112
+STAT_DATA_SIZE = 22
+
+conn = sqlite3.connect("data/gen67.sqlite")
+cursor = conn.cursor()
+
+
+with open('data/item-data.json','r') as f:
+    items = json.loads(f.read())
+
+if __name__ == "__main__" :
     run()
