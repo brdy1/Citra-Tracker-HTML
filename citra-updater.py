@@ -11,8 +11,6 @@ from datetime import datetime
 from citra import Citra
 
 
-
-
 def crypt(data, seed, i):
     value = data[i]
     shifted_seed = seed >> 16
@@ -634,7 +632,7 @@ def run():
                                 evohtml=''
                             htmltext+=f'     <div class="level mstat"><span class="level name">Level: </span><span class="level value">'+str(pkmn.level)+f'</span>{evohtml}</div>\r\n\t'
                             if pkmn.status != '':
-                                htmltext+='     <div class="status mstat"><img src="images/statuses/'+pkmn.getStatus()+'.png" height="25" width="40"></div>'
+                                htmltext+='     <div class="status mstat"><img src="images/statuses/'+pkmn.status+'.png" height="25" width="40"></div>'
                             else:
                                 htmltext+='     <div class="status mstat"></div>'
                             htmltext+='</div>\r\n' ## Close level-status div
