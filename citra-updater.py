@@ -559,7 +559,7 @@ def getURLAbbr(game):
     elif game == 16:
         return 'omega-ruby-alpha-sapphire/dex' ## ORAS sprites end in /dex
     else:
-        return 'sun-moon'
+        return 'home'
 
 def run():
     game,party_address = getGame()
