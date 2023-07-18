@@ -555,7 +555,7 @@ def analyze_statuses(self):
 
 def calcPower(pkmn,move):
     if move['name'] == 'Eruption':
-        return int(int(pkmn.cur_hp())/int(pkmn.stat_hp())*150)
+        return int(int(pkmn.cur_hp)/int(pkmn.maxhp)*150)
     else:
         return ('-' if not move['power'] else int(move['power']))
     
