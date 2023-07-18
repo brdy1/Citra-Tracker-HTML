@@ -89,7 +89,7 @@ class Pokemon:
         form = struct.unpack("B",self.raw_data[0x1D:0x1E])[0]
         query = f"""select pokemonid from "pokemon.pokemon" where pokemonpokedexnumber = {dex}"""
         match dex:
-            case 81 | 82 | 100 | 101 | 120 | 121 | 137 | 233 | 292 | 337 | 338 | 343 | 344 | 374 | 375 | 376 | 436 | 437 | 462 | 474 | 489 | 490 | 599 | 600 | 601 | 615 | 622 | 623 | 703 | 774 | 781 | 854 | 855 | 770 | 132 | 144 | 145 | 146 | 201 | 243 | 244 | 245 | 249 | 250 | 251 | 377 | 378 | 379 | 382 | 383 | 384 | 385 | 386 | 480 | 481 | 482 | 483 | 484 | 486 | 491 | 493 | 494 | 638 | 639 | 640 | 643 | 644 | 646 | 647 | 648 | 649 | 716 | 717 | 718 | 719 | 721: ### Genderless exceptions
+            case 81 | 82 | 100 | 101 | 120 | 121 | 137 | 233 | 292 | 337 | 338 | 343 | 344 | 374 | 375 | 376 | 436 | 437 | 462 | 474 | 489 | 490 | 599 | 600 | 601 | 615 | 622 | 623 | 703 | 774 | 781 | 854 | 855 | 770 | 132 | 144 | 145 | 146 | 201 | 243 | 244 | 245 | 249 | 250 | 251 | 377 | 378 | 379 | 382 | 383 | 384 | 385 | 386 | 480 | 481 | 482 | 483 | 484 | 486 | 491 | 493 | 494 | 638 | 639 | 640 | 643 | 644 | 646 | 647 | 649 | 716 | 717 | 718 | 719 | 721: ### Genderless exceptions
                 query+= " and pokemonsuffix is null"
             case 641 | 642 | 645:
                 if form > 0: ### Therian forms of Tornadus, Thundurus, Landorus
@@ -167,6 +167,10 @@ class Pokemon:
                 match form:
                     case 20:
                         query+= " and pokemonsuffix = 'black'"
+            case 670: ### Floette
+                match form:
+                    case 18:
+                        query+= " and pokemonsuffix = 'eternal'"
             case 678: ### Meowstic
                 match form:
                     case 10:
@@ -198,6 +202,8 @@ class Pokemon:
                     query+= " and pokemonsuffix ='mega'"
                 else:
                     query+= " and pokemonsuffix is null"
+        # print(form)
+        # print(query)
         self.id = cursor.execute(query).fetchone()[0]
         self.species,self.suffix,self.name = cursor.execute(f"""select pokemonspeciesname,pokemonsuffix,pokemonname from "pokemon.pokemon" where pokemonid = {self.id}""").fetchone()
         self.suffix = self.suffix or ''
@@ -527,7 +533,7 @@ def read_party(c,party_address):
 
 def launchHTTP():
     subprocess.run(["python", "-m", "http.server"]) ## Launches a local http server to allow the DOM/Axios requests
-    print("Please direct an OBS Browser Source to http://localhost/tracker.html or ./tracker.html")
+    print("Please direct an OBS Browser Source to http://localhost:8000/tracker.html or ./tracker.html")
 
 def print_bits(value):
     binary = bin(value)[2:].zfill(8)
