@@ -451,7 +451,7 @@ class Pokemon:
         attackingdamage = f"""
             attackingdmg as (
                 select
-                    mb.pokemonid as pokemonid,
+                    mb.pokemonid as pokemoeeeeeeenid,
                     mb.type1id as type1id,
                     mb.type2id as type2id,
                     max(tm1.damagemodifier*coalesce(tm2.damagemodifier,1)) as dmgmod
@@ -554,8 +554,10 @@ def analyze_statuses(self):
     print('end statuses')
 
 def calcPower(pkmn,move):
-    if move['name'] == 'Eruption':
+    if move['name'] in ('Eruption','Water Spout'):
         return int(int(pkmn.cur_hp)/int(pkmn.maxhp)*150)
+    if move['name'] in ('Return',):
+        return 1+(pkmn.friendship/120)
     else:
         return ('-' if not move['power'] else int(move['power']))
     
